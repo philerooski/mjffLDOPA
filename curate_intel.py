@@ -62,6 +62,23 @@ def curate_raw_data(syn):
     return(raw_data)
 
 
+def mutate_device_side(syn, raw_data_curated):
+    train_q = syn.tableQuery("select patient, device, deviceSide from syn10495809")
+    train = train_q.asDataFrame()
+    test_q = syn.tableQuery("select patient, device, deviceSide from syn10701954")
+    test = test_q.asDataFrame()
+    device_sides = train.append(test, ignore_index = False, sort = False)
+    device_sides = pd.DataFrame(list(set([tuple(r) for r in device_sides.values])),
+                                columns = ["subject_id", "device", "device_position"])
+    device_sides["device_position"] = device_sides["device_position"].apply(
+            lambda s : "RightUpperLimb" if s == "Right" else "LeftUpperLimb")
+    raw_data_curated["device_position"] = raw_data_curated.merge(
+            device_sides, how = "left", by = ["subject_id", "device"])
+    raw_data_curated["device_position"] = raw_data_curated["device_position"].apply(
+            lambda s : "LowerLimbs" if pd.isnull(s) else s)
+    return(device_sides)
+
+
 def translate_subject_id(sid):
     if sid < 100:
         return "{}_BOS".format(sid)
@@ -83,13 +100,13 @@ def curate_scores(syn):
                           'dyskinesia_LeftUpperLimb', 'dyskinesia_LowerLimbs',
                           'bradykinesia_RightUpperLimb',
                           'bradykinesia_LeftUpperLimb', 'bradykinesia_LowerLimbs'])
-    scores_long['phenotype'], scores_long['device_position'] = \
+    scores_long['phenotype'], scores_long['body_region'] = \
             scores_long['variable'].str.split("_", 1).str
     scores_long = scores_long.drop("variable", axis = 1)
     scores_long = scores_long.rename(columns = {"value": "score"})
     scores_curated = scores_long[
         ['subject_id', 'visit', 'session', 'task_id', 'task_code', 'timestamp_start',
-         'timestamp_end', 'phenotype', 'device_position', 'score']]
+         'timestamp_end', 'phenotype', 'body_region', 'score']]
     scores_curated = scores_curated.sort_values(
             by = ['subject_id', 'visit', 'session', 'timestamp_start'])
     scores_curated['subject_id'] = scores_curated['subject_id'].apply(translate_subject_id)
@@ -264,7 +281,7 @@ def store_tables(syn, raw_data_curated, scores_curated, meds_curated,
                        parent = PROJECT)
     sleep_table = sc.Table(sleep_schema, sleep_curated_clean)
     syn.store(sleep_table)
-     feedback survey
+    # feedback survey
     feedback_cols = [
             sc.Column(name = "subject_id", columnType = "STRING", maximumSize = 6),
             sc.Column(name = "charge_smartphone", columnType = "INTEGER"),
