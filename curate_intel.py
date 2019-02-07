@@ -125,6 +125,22 @@ def translate_metadata_time(year, month, day, timestamp):
     timestamp = int(dt.timestamp())
     return(timestamp)
 
+def iso_format(df):
+    return "{}-{}-{}".format(df.iloc[2], df.iloc[1], df.iloc[0])
+
+def curate_subject_questionnaire(path, subject_q_cols,
+                                 null_str = ["<Select from list>", "NA"]):
+    record = []
+    subject_q = pd.read_excel(
+            path, sheet_name="Subject_Questionnaire", usecols="B", squeeze=True,
+            skiprows=[0,1,2,3,17,21,22,36,37,43,44,53,54,61,62])
+    visit_date_indices = [12, 13, 14]
+    diagnosis_date_indices = [15, 16, 17]
+    last_levodopa_dose_date_indices = [28, 29, 30, 31]
+    for i in range(visit_date_indices[0]):
+        record.append(iso_format(subject_q.iloc[visit_date_indices]))
+    # TODO
+
 
 def curate_metadata(syn):
     w = su.walk(syn, METADATA_PARENT)
@@ -139,6 +155,18 @@ def curate_metadata(syn):
                      "accuracy_diary", "additional_feedback_device_phone",
                      "additional_feedback_diary", "additional_feedback_experiment"]
     feedback_curated = pd.DataFrame(columns = feedback_cols)
+    subject_q_cols = ["subject_id", "cohort", "gender", "birth_year",
+        "dominant_hand", "upper_limb_length", "upper_arm_length", "lower_arm_length",
+        "lower_limb_length", "thigh_length", "shank_length", "height", "weight",
+        "visit_date", "date_of_diagnosis", "pd_most_affected_side",
+        "gait_impediments", "posture_instability", "tremor", "bradykinesia",
+        "disrupted_sleep", "freeze_of_gait", "dyskinesia", "rigidity",
+        "other_symptoms", "last_levodopa_dose", "regular_medication", "geneActive_num",
+        "pebble_num", "geneActive_hand", "pebble_hand", "smartphone_location",
+        "recording_start", "recording_end", "recording_time_zone", "updrs_time",
+        "updrs_score_p1", "updrs_score_p2", "updrs_score_p3", "updrs_score_p4",
+        "h_and_y_score", "updrs_second_visit_time", "updrs_second_visit_score_p3"]
+    subject_q_curated = pd.DataFrame(columns = subject_q_cols)
     null_str = "<Select from list>"
     for metadata_name, metadata_id in metadata_files:
         subject_id = translate_metadata_subject_id(metadata_name)
