@@ -22,7 +22,7 @@ def translate_metadata_time(year, month, day, timestamp):
         dt = dt.replace(tzinfo = dateutil.tz.gettz("America/New_York"))
         timestamp = int(dt.timestamp())
     except ValueError:
-        timestamp = None
+        timestamp = float("nan")
     return(timestamp)
 
 
@@ -34,7 +34,7 @@ def iso_format(df):
 
 
 def curate_subject_questionnaire(path, subject_id, subject_q_cols,
-                                 null_str = ["Unknown", "<Select from list>", "NA"]):
+                                 null_str = ["Unknown", "<Select from list>"]):
     record = [subject_id]
     subject_q = pd.read_excel(
             path, sheet_name="Subject_Questionnaire", usecols="B", squeeze=True,
@@ -55,23 +55,67 @@ def curate_subject_questionnaire(path, subject_id, subject_q_cols,
     return(subject_q_row)
 
 
+def parse_controlled_sessions_values(controlled_session, subject_id, session_num):
+    record = [subject_id, session_num]
+    clinical_assessment_date_indices = [0, 1, 2]
+    time_indices = [3, 4, 8, 9, 10, 11]
+    clinical_assessment_date_vals = None
+    for item in controlled_session.iteritems():
+        index, value = item
+        if index in clinical_assessment_date_indices:
+            if clinical_assessment_date_vals is None:
+                clinical_assessment_date_vals = controlled_session.iloc[
+                        clinical_assessment_date_indices]
+            else:
+                pass
+        elif index in time_indices:
+            record.append(translate_metadata_time(
+                *clinical_assessment_date_vals[::-1],
+                value))
+        else:
+            record.append(value)
+    return record
+
+
 def curate_controlled_sessions(path, subject_id, controlled_session_cols,
-                               null_str = ["Unknown", "<Select from list>", "NA"]):
-    record = [subject_id]
+                               null_str = ["Unknown", "<Select from list>"]):
     first_session_t1 = pd.read_excel(path, sheet_name = "1st Controlled_Session",
-            skiprows=[0,1,2], usecols="C", skipfooter=1, squeeze = True)
+                                     skiprows=3, usecols="C", skipfooter=1,
+                                     squeeze = True, na_values = null_str)
     second_session_t1 = pd.read_excel(path, sheet_name = "2nd Controlled_Session",
-            skiprows=[0,1,2], usecols="C", skipfooter=1, squeeze = True)
-    first_session_t2 = pd.read_excel(path, sheet_name = "2nd Controlled_Session",
+                                      skiprows=3, usecols="C", skipfooter=1,
+                                      squeeze = True, na_values = null_str)
+    first_session_second_meds = pd.read_excel(
+            path, sheet_name = "1st Controlled_Session", skiprows=8, usecols="D",
+            skipfooter=3, squeeze = True, na_values = null_str, header = None)
+    second_session_second_meds = pd.read_excel(
+            path, sheet_name = "2nd Controlled_Session", skiprows=8, usecols="D",
+            skipfooter=3, squeeze = True, na_values = null_str, header = None)
+    first_session_t2 = pd.read_excel(path, sheet_name = "1st Controlled_Session",
                                      skiprows=4, skipfooter = 5, usecols="H",
                                      squeeze = True, na_values = null_str)
     second_session_t2 = pd.read_excel(path, sheet_name = "2nd Controlled_Session",
                                      skiprows=4, skipfooter = 5, usecols="H",
                                      squeeze = True, na_values = null_str)
     first_session_comments = pd.read_excel(path, sheet_name = "1st Controlled_Session",
-            skiprows=4, usecols="M", skipfooter=7, squeeze = True)
+                                           skiprows=4, usecols="M", skipfooter=7,
+                                           squeeze = True)
     second_session_comments = pd.read_excel(path, sheet_name = "2nd Controlled_Session",
-            skiprows=4, usecols="M", skipfooter=7, squeeze = True)
+                                            skiprows=4, usecols="M", skipfooter=7,
+                                            squeeze = True)
+    first_session = pd.concat([first_session_t1, first_session_second_meds[:1],
+                               first_session_t2, first_session_comments],
+                              ignore_index=True)
+    second_session = pd.concat([second_session_t1, second_session_second_meds[:1],
+                                second_session_t2, second_session_comments],
+                               ignore_index=True)
+    record_one = parse_controlled_sessions_values(
+            first_session, subject_id, 1)
+    record_two = parse_controlled_sessions_values(
+            second_session, subject_id, 2)
+    controlled_sessions_curated = pd.DataFrame([record_one, record_two],
+                                               columns=controlled_session_cols)
+    return controlled_sessions_curated
 
 
 def curate_metadata(syn):
@@ -89,10 +133,12 @@ def curate_metadata(syn):
         "updrs_score_p1", "updrs_score_p2", "updrs_score_p3", "updrs_score_p4",
         "h_and_y_score", "updrs_second_visit_time", "updrs_second_visit_score_p3"]
     subject_q_curated = pd.DataFrame(columns = subject_q_cols)
-    controlled_session_cols = ["subject_id", "clinical_assessment_timestamp",
-            "medication_intake_time", "medication_name", "medication_dosage",
-            "timezone", "stopwatch_start_time", "fox_insight_app_start_time",
-            "geneActiv_start_time", "general_comments"]
+    controlled_session_cols = ["subject_id", "session",
+        "clinical_assessment_timestamp", "medication_intake_timestamp",
+        "medication_name", "medication_dosage", "timezone",
+        "second_medication_intake_timestamp", "stopwatch_start_timestamp",
+        "fox_insight_app_start_timestamp", "geneActiv_start_timestamp",
+        "general_comments"]
     controlled_session_curated = pd.DataFrame(columns = controlled_session_cols)
     meds_cols = ["subject_id", "timestamp", "pd_related_medications",
                  "other_medications"]
