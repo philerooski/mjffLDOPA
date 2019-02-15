@@ -117,6 +117,49 @@ def curate_controlled_sessions(path, subject_id, controlled_session_cols,
                                                columns=controlled_session_cols)
     return controlled_sessions_curated
 
+def parse_subject_diary(r):
+    results = []
+    non_dyskinesia_vals = r[[0,4,5,6]]
+    dyskinesia_vals = r[[1,2,3]]
+    dyskinesia_level = dyskinesia_vals.index("Y")
+    results.append(dyskinesia_level)
+    for v in non_dyskinesia_vals:
+        if v == "Y":
+            results.append(True)
+        else:
+            results.append(False)
+    results.append(r[7]) # comments
+    return results
+
+
+def curate_subject_diary(path, subject_id, subject_diary_cols):
+    record_one = []
+    record_two = []
+    first_diary_date = pd.read_excel(path, sheet_name="1st In Clinic Subject Diary",
+                                     skiprows=4, usecols="C", squeeze=True,
+                                     header=None).iloc[:4]
+    second_diary_date = pd.read_excel(path, sheet_name="2nd In Clinic Subject Diary",
+                                     skiprows=4, usecols="C", squeeze=True,
+                                     header=None).iloc[:4]
+    first_diary = pd.read_excel(path, sheet_name="1st In Clinic Subject Diary",
+                                skiprows=12, usecols="B:I", header=None)
+    second_diary = pd.read_excel(path, sheet_name = "2nd In Clinic Subject Diary",
+                                 skiprows=12, usecols="B:I", header=None)
+    first_date = iso_format(first_diary_date.iloc[:3])
+    second_date = iso_format(second_diary_date.iloc[:3])
+    first_tz = first_diary_date.iloc[4]
+    second_tz = second_diary_date.iloc[4]
+    for i, r in first_diary.iterrows():
+        results = [subject_id, 1, first_date, first_tz, i*30]
+        results.append(parse_subject_diary(r))
+        record_one.append(results)
+    for i, r in second_diary.iterrows():
+        results = [subject_id, 2, second_date, second_tz, i*30]
+        results.append(parse_subject_diary(r))
+        record_two.append(results)
+    subject_diary_curated = pd.DataFrame(record_one, columns=subject_diary_cols)
+    subject_diary_curated = subject_diary_curated.append(record_two, ignore_index=True)
+    return(subject_diary_curated)
 
 def curate_metadata(syn):
     w = su.walk(syn, METADATA_PARENT)
@@ -140,6 +183,10 @@ def curate_metadata(syn):
         "fox_insight_app_start_timestamp", "geneActiv_start_timestamp",
         "general_comments"]
     controlled_session_curated = pd.DataFrame(columns = controlled_session_cols)
+    subject_diary_cols = ["subject_id", "diary_num", "date", "timezone", "time_lag",
+        "dyskinesia", "off", "tremor", "freeze_of_gait", "slowness_of_movement",
+        "comments"]
+    subject_diary_curated = pd.DataFrame(columns = subject_diary_cols)
     meds_cols = ["subject_id", "timestamp", "pd_related_medications",
                  "other_medications"]
     meds_curated = pd.DataFrame(columns = meds_cols)
