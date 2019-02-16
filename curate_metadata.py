@@ -27,6 +27,10 @@ def translate_metadata_time(year, month, day, timestamp):
 
 
 def iso_format(df):
+    if len(str(df.iloc[0])) == 1:
+        df.iloc[0] = "0" + str(df.iloc[0])
+    if len(str(df.iloc[1])) == 1:
+        df.iloc[1] = "0" + str(df.iloc[1])
     if all(pd.notnull(df.values)):
         return "{}-{}-{}".format(df.iloc[2], df.iloc[1], df.iloc[0])
     else:
@@ -119,15 +123,20 @@ def curate_controlled_sessions(path, subject_id, controlled_session_cols,
 
 def parse_subject_diary(r):
     results = []
-    non_dyskinesia_vals = r[[0,4,5,6]]
-    dyskinesia_vals = r[[1,2,3]]
-    dyskinesia_level = dyskinesia_vals.index("Y")
+    non_dyskinesia_vals = r.iloc[[0,4,5,6]]
+    dyskinesia_vals = list(r.iloc[[1,2,3]])
+    try:
+        dyskinesia_level = dyskinesia_vals.index("Y")
+    except:
+        dyskinesia_level = None
     results.append(dyskinesia_level)
     for v in non_dyskinesia_vals:
         if v == "Y":
             results.append(True)
-        else:
+        elif v == "N":
             results.append(False)
+        else:
+            results.append(None)
     results.append(r[7]) # comments
     return results
 
@@ -147,18 +156,21 @@ def curate_subject_diary(path, subject_id, subject_diary_cols):
                                  skiprows=12, usecols="B:I", header=None)
     first_date = iso_format(first_diary_date.iloc[:3])
     second_date = iso_format(second_diary_date.iloc[:3])
-    first_tz = first_diary_date.iloc[4]
-    second_tz = second_diary_date.iloc[4]
+    first_tz = first_diary_date.iloc[3]
+    second_tz = second_diary_date.iloc[3]
     for i, r in first_diary.iterrows():
         results = [subject_id, 1, first_date, first_tz, i*30]
-        results.append(parse_subject_diary(r))
+        for i in parse_subject_diary(r):
+            results.append(i)
         record_one.append(results)
     for i, r in second_diary.iterrows():
         results = [subject_id, 2, second_date, second_tz, i*30]
-        results.append(parse_subject_diary(r))
+        for i in parse_subject_diary(r):
+            results.append(i)
         record_two.append(results)
-    subject_diary_curated = pd.DataFrame(record_one, columns=subject_diary_cols)
-    subject_diary_curated = subject_diary_curated.append(record_two, ignore_index=True)
+    record_one_df = pd.DataFrame(record_one, columns=subject_diary_cols)
+    record_two_df = pd.DataFrame(record_two, columns=subject_diary_cols)
+    subject_diary_curated = pd.concat([record_one_df, record_two_df], ignore_index=True)
     return(subject_diary_curated)
 
 def curate_metadata(syn):
@@ -183,7 +195,7 @@ def curate_metadata(syn):
         "fox_insight_app_start_timestamp", "geneActiv_start_timestamp",
         "general_comments"]
     controlled_session_curated = pd.DataFrame(columns = controlled_session_cols)
-    subject_diary_cols = ["subject_id", "diary_num", "date", "timezone", "time_lag",
+    subject_diary_cols = ["subject_id", "diary", "date", "timezone", "time_lag",
         "dyskinesia", "off", "tremor", "freeze_of_gait", "slowness_of_movement",
         "comments"]
     subject_diary_curated = pd.DataFrame(columns = subject_diary_cols)
@@ -209,10 +221,13 @@ def curate_metadata(syn):
                                  skiprows=2, usecols = "A:B")
         subject_q_curated = subject_q_curated.append(
                 curate_subject_questionnaire(f.path, subject_id, subject_q_cols),
-                ignore_index = True)
+                ignore_index=True)
         controlled_session_curated = controlled_session_curated.append(
                 curate_controlled_sessions(f.path, subject_id, controlled_session_cols),
-                ignore_index = True)
+                ignore_index=True)
+        subject_diary_curated = subject_diary_curated.append(
+                curate_subject_diary(f.path, subject_id, subject_diary_cols),
+                ignore_index=True)
         # meds
         meds = meds[["Day (DD)", "Month (MM)", "Year (YYYY)", "Time (hh:mm - 24 hour format)",
                      "PD-related medications taken", "Other medications taken"]]
