@@ -123,8 +123,8 @@ def curate_controlled_sessions(path, subject_id, controlled_session_cols,
 
 def parse_subject_diary(r):
     results = []
-    non_dyskinesia_vals = r.iloc[[0,4,5,6]]
-    dyskinesia_vals = list(r.iloc[[1,2,3]])
+    non_dyskinesia_vals = r.iloc[[4,5,6]]
+    dyskinesia_vals = list(r.iloc[[0,1,2,3]])
     try:
         dyskinesia_level = dyskinesia_vals.index("Y")
     except:
@@ -137,7 +137,7 @@ def parse_subject_diary(r):
             results.append(False)
         else:
             results.append(None)
-    results.append(r[7]) # comments
+    results.append(r.iloc[7]) # comments
     return results
 
 
@@ -164,10 +164,10 @@ def curate_subject_diary(path, subject_id, subject_diary_cols):
             results.append(i)
         record_one.append(results)
     for i, r in second_diary.iterrows():
-        results = [subject_id, 2, second_date, second_tz, i*30]
+        results_two = [subject_id, 2, second_date, second_tz, i*30]
         for i in parse_subject_diary(r):
-            results.append(i)
-        record_two.append(results)
+            results_two.append(i)
+        record_two.append(results_two)
     record_one_df = pd.DataFrame(record_one, columns=subject_diary_cols)
     record_two_df = pd.DataFrame(record_two, columns=subject_diary_cols)
     subject_diary_curated = pd.concat([record_one_df, record_two_df], ignore_index=True)
@@ -196,7 +196,7 @@ def curate_metadata(syn):
         "general_comments"]
     controlled_session_curated = pd.DataFrame(columns = controlled_session_cols)
     subject_diary_cols = ["subject_id", "diary", "date", "timezone", "time_lag",
-        "dyskinesia", "off", "tremor", "freeze_of_gait", "slowness_of_movement",
+        "dyskinesia", "tremor", "freeze_of_gait", "slowness_of_movement",
         "comments"]
     subject_diary_curated = pd.DataFrame(columns = subject_diary_cols)
     meds_cols = ["subject_id", "timestamp", "pd_related_medications",
@@ -302,11 +302,12 @@ def curate_metadata(syn):
         feedback_curated_records = pd.DataFrame([feedback_curated_row],
                                                 columns = feedback_cols)
         feedback_curated = feedback_curated.append(feedback_curated_records)
-    return meds_curated, sleep_curated, feedback_curated
+    return subject_q_curated, controlled_session_curated, subject_diary_curated, meds_curated, sleep_curated, feedback_curated
 
 
 def main():
     syn = sc.login()
+    curate_metadata(syn)
 
 
 if __name__ == "__main__":
